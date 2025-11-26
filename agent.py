@@ -7,6 +7,11 @@ from spade.behaviour import PeriodicBehaviour
 from spade.message import Message
 
 
+class MessageType:
+    TERMINATION = "term"
+    VALUE_UPDATE = "val"
+
+
 class Cost(Enum):
     MESSAGE_C = 1000
     MESSAGE = 1
@@ -27,18 +32,26 @@ class ConsensusAgent(Agent):
                 print(
                     f"agent {self.agent.jid} received a message from {msg.sender.jid}"
                 )
+                # if termination signal received echo it to everyone
+                if msg.get_metadata("type") == MessageType.TERMINATION:
+                    await self._broadcast_termination(excluded=msg.sender.jid)
+                    self.kill()
+                    return
+
                 # it's cheaper to subtract the old value every time if n neighbours < Cost.Memory / Cost.OP
                 new_value += float(msg.body) - self.agent.value  # type: ignore
                 self.agent.add_cost(Cost.OP, 2)
                 msg = await self.receive()
             new_value = self.agent.value + self.agent.alpha * new_value
+
+            if self.agent.is_reporter and await self._check_convergence(new_value):
+                await self._broadcast_termination()
+                self.kill()
+
             self.agent.value = new_value
 
             # publish the new value
-            for recipient in self.agent.recipients:
-                message = Message(to=recipient)
-                message.body = f"{self.agent.value}"
-                await self.send(message)
+            await self._broadcast_value(self.agent.value)
             self.agent.add_cost(Cost.MESSAGE, len(self.agent.recipients))
 
             print(
@@ -56,6 +69,28 @@ class ConsensusAgent(Agent):
                 f"agent {self.agent.jid} started with initial value of {self.agent.value}"
             )
 
+        async def _check_convergence(self, new_value: float):
+            if abs(new_value - self.agent.value) < self.agent.epsilon:
+                self.agent.stable_ticks += 1
+            else:
+                self.agent.stable_ticks = 0
+            return self.agent.stable_ticks >= 3
+
+        async def _broadcast_termination(self, excluded=None):
+            for recipient in self.agent.recipients:
+                if recipient == excluded:
+                    continue
+                message = Message(to=recipient)
+                message.set_metadata("type", MessageType.TERMINATION)
+                await self.send(message)
+
+        async def _broadcast_value(self, value: float):
+            for recipient in self.agent.recipients:
+                message = Message(to=recipient)
+                message.body = f"{self.agent.value}"
+                message.set_metadata("type", MessageType.VALUE_UPDATE)
+                await self.send(message)
+
     def __init__(
         self,
         jid: str,
@@ -71,6 +106,7 @@ class ConsensusAgent(Agent):
         self.start_at = start_at
         self.value = value
         self.recipients = recipients
+        self.stable_ticks = 0
 
         self.alpha = 1 / (1 + len(recipients))
         self.epsilon = epsilon

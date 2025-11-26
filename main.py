@@ -9,21 +9,23 @@ from topology import generate_full_topology, generate_ring_topology
 
 async def main():
 
-    N_AGENTS = 12
+    N_AGENTS = 4
 
-    topology = generate_full_topology(N_AGENTS)
+    topology = generate_ring_topology(N_AGENTS)
 
     start_at = datetime.now() + timedelta(seconds=3)
 
     agents = []
 
-    for node in topology:
+    for i, node in enumerate(topology):
         agent = ConsensusAgent(
             jid=node["jid"],
             value=node["value"],
             recipients=node["neighbors"],
             start_at=start_at,
         )
+        if not i:
+            agent.is_reporter = True
         agents.append(agent)
         await agent.start()
 
