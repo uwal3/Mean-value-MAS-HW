@@ -1,4 +1,4 @@
-# Multi-Agent Consensus Project
+# Multi-Agent Mean Value Calculation
 
 Проект моделирует процесс достижения консенсуса группой агентов с подсчетом затраченных ресурсов. Использует библиотеку SPADE и XMPP-сервер Prosody.
 
@@ -33,7 +33,7 @@ python main.py graph.values="[1,2,3,4,5]"
 
 ## Описание файлов
 
-* `agent.py` - логика агента и алгоритм консенсуса
+* `agent.py` - логика агентов и алгоритм консенсуса
 * `main.py` - инициализация и запуск системы
 * `docker-compose.yaml` - конфигурация контейнера Prosody
 * `conf/prosody.cfg.lua` - конфигурация сервера Prosody
