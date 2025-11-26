@@ -20,29 +20,25 @@ class ConsensusAgent(Agent):
         async def run(self):
             self.agent: ConsensusAgent
 
-            # poll for incoming messages
-            incoming_values = []
+            # poll for incoming messages and calculate the new value on the fly
+            new_value = 0
             msg = await self.receive()
             while msg:
                 print(
                     f"agent {self.agent.jid} received a message from {msg.sender.jid}"
                 )
-                incoming_values.append(float(msg.body))  # type: ignore
+                # it's cheaper to subtract the old value every time if n neighbours < Cost.Memory / Cost.OP
+                new_value += float(msg.body) - self.agent.value  # type: ignore
+                self.agent.add_cost(Cost.OP, 2)
                 msg = await self.receive()
-            self.agent.add_cost(Cost.MEMORY, len(incoming_values) + 1)
-
-            # update internal value
-            self.agent.value = self.agent.value + self.agent.alpha * sum(
-                [x_j - self.agent.value for x_j in incoming_values]
-            )
-            self.agent.add_cost(Cost.OP, len(incoming_values) * 2 + 1)
+            new_value = self.agent.value + self.agent.alpha * new_value
 
             # publish the new value
             for recipient in self.agent.recipients:
                 message = Message(to=recipient)
                 message.body = f"{self.agent.value}"
                 await self.send(message)
-                self.agent.add_cost(Cost.MESSAGE)
+            self.agent.add_cost(Cost.MESSAGE, len(self.agent.recipients))
 
             print(
                 f"agent {self.agent.jid} published the new value of {self.agent.value}"
