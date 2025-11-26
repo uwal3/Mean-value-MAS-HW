@@ -6,5 +6,5 @@ services:
       - "5222:5222"
       - "5280:5280"
     volumes:
-      - ./prosody.cfg.lua:/etc/prosody/prosody.cfg.lua
+      - ./conf/prosody.cfg.lua:/etc/prosody/prosody.cfg.lua
     user: root

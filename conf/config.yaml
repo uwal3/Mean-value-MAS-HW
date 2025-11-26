@@ -1,0 +1,11 @@
+graph:
+  topology: "full"
+  n: 12
+  values: null
+
+xmpp:
+  domain: "localhost"
+
+agents:
+  start_delay_sec: 3
+  epsilon: 1e-4
