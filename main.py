@@ -6,11 +6,11 @@ from datetime import datetime, timedelta
 import spade
 from omegaconf import OmegaConf
 
-from agent import ConsensusAgent
+from agent import CenterAgent, ConsensusAgent
 from util.logging import setup_global_logging
 from util.topology import generate_full_topology, generate_ring_topology
 
-setup_global_logging(logging.DEBUG)
+setup_global_logging(logging.INFO)
 
 file_cfg = OmegaConf.load("./conf/config.yaml")
 cli_cfg = OmegaConf.from_cli()
@@ -28,6 +28,7 @@ async def main():
         values = [random.randint(0, 100) for _ in range(n_agents)]
     else:
         n_agents = len(values)
+    target = sum(values) / n_agents
 
     topology = None
     if cfg.graph.topology == "full":
@@ -40,12 +41,20 @@ async def main():
         )
     assert topology is not None, "topology must be either 'full' or 'ring'"
 
+    def log(value: float):
+        logger.info(f"the mean value is {value}, {target=}")
+
+    center_agent_jid = "center_agent@localhost"
+    center_agent = CenterAgent(center_agent_jid, log)
+    await center_agent.start()
+
     agents = []
     start_at = datetime.now() + timedelta(seconds=cfg.agents.start_delay_sec)
     for i, node in enumerate(topology):
         agent = ConsensusAgent(
             jid=node["jid"],
             value=node["value"],
+            center_agent=center_agent_jid,
             recipients=node["neighbors"],
             start_at=start_at,
             epsilon=cfg.agents.epsilon,
@@ -57,8 +66,8 @@ async def main():
         logger.info(f"new node with value of {node['value']}")
         await agent.start()
 
-    while any([agent.is_alive() for agent in agents]):
-        await asyncio.sleep(0.25)
+    while center_agent.is_alive():
+        await asyncio.sleep(1)
 
     total_cost = sum([agent.total_cost for agent in agents])
     for agent in agents:

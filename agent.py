@@ -1,10 +1,10 @@
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import List
+from typing import Callable, List
 
 from spade.agent import Agent
-from spade.behaviour import PeriodicBehaviour
+from spade.behaviour import OneShotBehaviour, PeriodicBehaviour
 from spade.message import Message
 
 
@@ -44,6 +44,12 @@ class ConsensusAgent(Agent):
 
             if self.agent.is_reporter and await self._check_convergence(new_value):
                 await self._broadcast_termination()
+
+                message = Message(to=self.agent.center_agent)
+                message.set_metadata("type", MessageType.VALUE_UPDATE)
+                message.body = f"{new_value}"
+                await self.send(message)
+
                 self.agent.add_cost(Cost.MESSAGE_C)
                 self.kill()
 
@@ -82,11 +88,11 @@ class ConsensusAgent(Agent):
         async def _broadcast_value(self, value: float):
             for recipient in self.agent.recipients:
                 message = Message(to=recipient)
-                message.body = f"{self.agent.value}"
+                message.body = f"{value}"
                 message.set_metadata("type", MessageType.VALUE_UPDATE)
                 await self.send(message)
             self.agent.logger.debug(
-                f"agent {self.agent.jid} published the new value of {self.agent.value}"
+                f"agent {self.agent.jid} published the new value of {value}"
             )
 
     def __init__(
@@ -94,17 +100,19 @@ class ConsensusAgent(Agent):
         jid: str,
         value: float,
         recipients: List[str],
+        center_agent: str,
         start_at: datetime,
         is_reporter: bool = False,
         epsilon: float = 1e-2,
     ):
         super().__init__(jid, "password", 5222, False)
 
-        self.is_reporter = is_reporter
-        self.start_at = start_at
         self.value = value
         self.recipients = recipients
+        self.center_agent = center_agent
+        self.start_at = start_at
         self.stable_ticks = 0
+        self.is_reporter = is_reporter
 
         self.alpha = 1 / (1 + len(recipients))
         self.epsilon = epsilon
@@ -118,3 +126,37 @@ class ConsensusAgent(Agent):
 
     def add_cost(self, cost: Cost, count: int = 1):
         self.total_cost += cost.value * count
+
+
+class CenterAgent(Agent):
+
+    class CenterBehaviour(OneShotBehaviour):
+        async def run(self):
+            self.agent: CenterAgent
+
+            msg = None
+            while not msg:
+                msg = await self.receive(1)
+
+            if msg.get_metadata("type") == MessageType.VALUE_UPDATE:
+                value = float(msg.body)  # type: ignore
+                self.agent.logger.debug(f"received value: {value}")
+                if self.agent.callback:
+                    self.agent.callback(value)  # type: ignore
+
+            await self.agent.stop()
+
+    def __init__(self, jid: str, callback=None):
+        """
+        listens for messages from consensus agents
+
+        :param callback: optional callback function to do something with the received value
+        """
+        super().__init__(jid, "password", 5222, False)
+        self.callback = callback
+
+        self.logger = logging.getLogger(jid)
+
+    async def setup(self):
+        b = self.CenterBehaviour()
+        self.add_behaviour(b)
