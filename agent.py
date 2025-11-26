@@ -32,6 +32,7 @@ class ConsensusAgent(Agent):
                 self.agent.add_cost(Cost.OP, 2)
                 msg = await self.receive()
             new_value = self.agent.value + self.agent.alpha * new_value
+            self.agent.value = new_value
 
             # publish the new value
             for recipient in self.agent.recipients:
