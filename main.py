@@ -1,13 +1,18 @@
 import asyncio
+import logging
 from datetime import datetime, timedelta
 
 import spade
 
 from agent import ConsensusAgent
-from topology import generate_full_topology, generate_ring_topology
+from util.logging import setup_global_logging
+from util.topology import generate_full_topology, generate_ring_topology
+
+setup_global_logging(logging.DEBUG)
 
 
 async def main():
+    logger = logging.getLogger(__name__)
 
     N_AGENTS = 4
 
@@ -32,9 +37,8 @@ async def main():
     while any([agent.is_alive() for agent in agents]):
         await asyncio.sleep(0.25)
 
-    print("\nresults:")
     for agent in agents:
-        print(f"agent {agent.jid}: {agent.value}")
+        logger.info(f"agent {agent.jid} finished: {agent.value=}, {agent.total_cost=}")
         await agent.stop()
 
 

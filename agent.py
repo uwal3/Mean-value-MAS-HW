@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from enum import Enum
 from typing import List
@@ -43,6 +44,7 @@ class ConsensusAgent(Agent):
 
             if self.agent.is_reporter and await self._check_convergence(new_value):
                 await self._broadcast_termination()
+                self.agent.add_cost(Cost.MESSAGE_C)
                 self.kill()
 
             self.agent.value = new_value
@@ -52,13 +54,13 @@ class ConsensusAgent(Agent):
             self.agent.add_cost(Cost.MESSAGE, len(self.agent.recipients))
 
         async def on_end(self):
-            print(
+            self.agent.logger.debug(
                 f"agent {self.agent.jid} finished with final value of {self.agent.value}"
             )
             await self.agent.stop()
 
         async def on_start(self):
-            print(
+            self.agent.logger.debug(
                 f"agent {self.agent.jid} started with initial value of {self.agent.value}"
             )
 
@@ -83,7 +85,7 @@ class ConsensusAgent(Agent):
                 message.body = f"{self.agent.value}"
                 message.set_metadata("type", MessageType.VALUE_UPDATE)
                 await self.send(message)
-            print(
+            self.agent.logger.debug(
                 f"agent {self.agent.jid} published the new value of {self.agent.value}"
             )
 
@@ -107,6 +109,8 @@ class ConsensusAgent(Agent):
         self.alpha = 1 / (1 + len(recipients))
         self.epsilon = epsilon
         self.total_cost = 0
+
+        self.logger = logging.getLogger(jid)
 
     async def setup(self):
         b = self.ConsensusBehaviour(period=1, start_at=self.start_at)
