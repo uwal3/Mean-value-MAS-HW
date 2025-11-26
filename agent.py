@@ -29,9 +29,6 @@ class ConsensusAgent(Agent):
             new_value = 0
             msg = await self.receive()
             while msg:
-                print(
-                    f"agent {self.agent.jid} received a message from {msg.sender.jid}"
-                )
                 # if termination signal received echo it to everyone
                 if msg.get_metadata("type") == MessageType.TERMINATION:
                     await self._broadcast_termination(excluded=msg.sender.jid)
@@ -53,10 +50,6 @@ class ConsensusAgent(Agent):
             # publish the new value
             await self._broadcast_value(self.agent.value)
             self.agent.add_cost(Cost.MESSAGE, len(self.agent.recipients))
-
-            print(
-                f"agent {self.agent.jid} published the new value of {self.agent.value}"
-            )
 
         async def on_end(self):
             print(
@@ -90,6 +83,9 @@ class ConsensusAgent(Agent):
                 message.body = f"{self.agent.value}"
                 message.set_metadata("type", MessageType.VALUE_UPDATE)
                 await self.send(message)
+            print(
+                f"agent {self.agent.jid} published the new value of {self.agent.value}"
+            )
 
     def __init__(
         self,
