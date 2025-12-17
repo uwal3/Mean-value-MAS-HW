@@ -26,8 +26,9 @@ class ConsensusAgent(Agent):
         async def run(self):
             self.agent: ConsensusAgent
 
-            # poll for incoming messages and calculate the new value on the fly
-            new_value = 0
+            old_value = self.agent.value
+
+            # poll for incoming messages and apply LVP algorithm
             msg = await self.receive()
             while msg:
                 # if a request is received, echo it to everyone
@@ -36,24 +37,23 @@ class ConsensusAgent(Agent):
                     self.kill()
                     return
 
-                # it's cheaper to subtract the old value every time if n neighbours < Cost.Memory / Cost.OP
-                new_value += float(msg.body) - self.agent.value  # type: ignore
-                self.agent.add_cost(Cost.OP, 2)
+                neighbor_value = float(msg.body)  # type: ignore
+                self.agent.value += self.agent.alpha * (
+                    neighbor_value - self.agent.value
+                )
+                self.agent.add_cost(Cost.OP, 3)
                 msg = await self.receive()
-            new_value = self.agent.value + self.agent.alpha * new_value
 
-            if self.agent.is_reporter and await self._check_convergence(new_value):
+            if self.agent.is_reporter and await self._check_convergence(old_value):
                 await self._broadcast_request()
 
                 message = Message(to=self.agent.center_agent)
                 message.set_metadata("performative", Performative.INFORM)
-                message.body = f"{new_value}"
+                message.body = f"{self.agent.value}"
                 await self.send(message)
 
                 self.agent.add_cost(Cost.MESSAGE_C)
                 self.kill()
-
-            self.agent.value = new_value
 
             # publish the new value
             await self._broadcast_value(self.agent.value)
@@ -111,7 +111,7 @@ class ConsensusAgent(Agent):
         self.stable_ticks = 0
         self.is_reporter = is_reporter
 
-        self.alpha = 1 / (1 + len(recipients))
+        self.alpha = 1 / (1 + 3 * len(recipients))
         self.epsilon = epsilon
         self.total_cost = 0
 
